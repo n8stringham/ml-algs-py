@@ -211,10 +211,11 @@ if __name__ == '__main__':
 
         # UNCOMMENT TO PLOT COST
         # plot the cost over time
-#        plt.plot(np.arange(len(costs)), costs)
-#        plt.xlabel('number of updates')
-#        plt.ylabel('lms cost')
-#        plt.show()
+        plt.plot(np.arange(len(costs)), costs)
+        plt.xlabel('number of updates')
+        plt.ylabel('lms cost')
+        plt.savefig(f'optimize-{args.mode}')
+        #plt.show()
 
 
 

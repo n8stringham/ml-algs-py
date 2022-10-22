@@ -6,6 +6,7 @@ from collections import Counter, defaultdict
 import math
 import statistics
 import pandas as pd
+import random
 
 class Node():
     '''
@@ -112,6 +113,7 @@ class DecisionStump():
         '''
         Find the best attribute to split on.
         '''
+        attributes = random.sample(attributes, 6)
         # for each of the attributes we need to calculate IG
         # Then we pick whichever attribute has the highest IG
         # If all labels the same, then no further split
@@ -230,6 +232,12 @@ def majority_label(S):
     # group instances by label and get the mode
     # possibly more than 1 mode but we choose first by default.
     #label = S.iloc[:,S.columns[-1]].mode()[0]
-    label = S.loc[:,S.columns[-1]].mode()[0]
+    groups = S.groupby([S.columns[-1]]).sum()
+    #label = S.loc[:,S.columns[-1]].mode()[0]
+    #label = groups.loc[groups['weights'].idxmax()]
+    print("groups=",groups)
+    print("groups.idxmax()=",groups.idxmax())
+    label = groups.idxmax()[0]
+    print("label=",label)
     return label
 

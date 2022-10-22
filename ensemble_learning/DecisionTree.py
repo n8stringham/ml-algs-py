@@ -218,6 +218,7 @@ class DecisionTree():
             # find attr value of the test instance
             attr_val = instance[start.attribute]
             #print("attr_val=",attr_val)
+            #print("self.attr_vals=",self.attr_vals)
             # which child to go to next
             branch = self.attr_vals[start.attribute].index(attr_val)
             #print("branch=",branch)

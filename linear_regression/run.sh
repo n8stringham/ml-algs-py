@@ -1,5 +1,4 @@
 #!/bin/sh
-
-python optimize.py --mode='bgd'
-python optimize.py --mode='sgd'
-python optimize.py --mode='analytic'
+python3 optimize.py --mode='bgd'
+python3 optimize.py --mode='sgd'
+python3 optimize.py --mode='analytic'

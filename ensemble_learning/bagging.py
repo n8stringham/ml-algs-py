@@ -217,6 +217,31 @@ def run_experiments(train_df, test_df, metric, T, fill_unk=False):
 
     return train_errors, test_errors
 
+def compute_bias(preds, labels):
+    '''
+    given a 2d list of predictions and the true labels compute the bias.
+    '''
+    preds = np.array(preds)
+    #print("preds=",preds)
+    labels = np.array(labels)
+    #print("labels.shape=",labels.shape)
+    #print("preds.shape=",preds.shape)
+    avg = preds.sum(axis=0) / preds.shape[0]
+    #square error
+    res = np.power(avg - labels, 2)
+    return res
+
+def compute_variance(preds, labels):
+    '''
+    given a 2d list of predictions and the true labels compute the sample variance.
+    '''
+    preds = np.array(preds)
+    labels = np.array(labels)
+
+    mean = preds.sum(axis=0) / preds.shape[0]
+
+    var = np.power(preds - mean, 2).sum(axis=0) / (preds.shape[0] - 1)
+    return var
 
 # Running the Experiments
 if __name__ == '__main__':
@@ -230,31 +255,30 @@ if __name__ == '__main__':
     test_df = pd.DataFrame(test_instances)
 
    # FIXME uncomment to run experiment 2B
-   # print('RUNNING BAGGING EXPERIMENT 2B')
-   # res = run_experiments(train_df, test_df, entropy, args.T, fill_unk=False)
+    print('RUNNING BAGGING EXPERIMENT 2B')
+    res = run_experiments(train_df, test_df, entropy, args.T, fill_unk=False)
 
-   # xs = range(1, args.T + 1)
-   # plt.plot(xs, res[0], label='train error')
-   # plt.plot(xs, res[1], label='test error')
-   # plt.legend()
-   # plt.savefig('2b.pdf')
-   ## plt.show()
+    xs = range(1, args.T + 1)
+    plt.plot(xs, res[0], label='train error')
+    plt.plot(xs, res[1], label='test error')
+    plt.legend()
+    #plt.savefig('2b.pdf')
+   # plt.show()
 
 
-    # 2C
-    # list of list of models. each list represents a bagged decision tree composed of 500 trees. there are 100 bagged models in total
+   # 2C
+   # list of list of models. each list represents a bagged decision tree composed of 500 trees. there are 100 bagged models in total
+
     print('RUNNING BAGGING EXPERIMENT 2C')
+    # Pre-process to convert numeric to categorical
+    # And decide how to handle UNK
+    train_df, attr_vals = numeric2categorical(train_df, fill_unk=False)
+
+    test_df = numeric2categorical(test_df)[0]
     for i in range(50):
         # sample 1000 training instances
         sample = train_df.sample(n=1000)
         
-        # Pre-process to convert numeric to categorical
-        # And decide how to handle UNK
-        train_df, attr_vals = numeric2categorical(train_df, fill_unk=False)
-
-        # only need the attr_vals from train_df
-        test_df = numeric2categorical(test_df)[0]
-        #print("attr_vals=",attr_vals)
 
         # store all of the models
         models = []
@@ -277,42 +301,61 @@ if __name__ == '__main__':
             # store model for use to predict on test data
             models.append(model)
 
-        # save the bagged decision tree
-        with open(f'bagged_trees/bagged-{i}.pkl', 'wb') as f:
-            pickle.dump(models, f)
+       # # save the bagged decision tree
+       # with open(f'bagged_trees/bagged-{i}.pkl', 'wb') as f:
+       #     pickle.dump(models, f)
 
-        #with open(f'bagged_trees/bagged-{0}.pkl', 'rb') as f:
-            #ms = pickle.load(f)
-
-        print('iterateion ', i)
+        print('iteration ', i)
         
-        #####
-        # 3C calculations
-        # ###
-        bagged_models = []
-        for num in range(50):
-            with open(f'bagged_trees/bagged-{num}.pkl', 'rb') as f:
-                m = pickle.load(f)
-                # add the list of models to bagged models
-                bagged_models.append(m)
+    #####
+    # 3C calculations
+    # ###
+    # make sure these are numeric
+    train_df = numeric2categorical(train_df, fill_unk=False)[0]
+    test_df = numeric2categorical(test_df, fill_unk=False)[0]
 
-        # Compute the predictions from the first tree of each bagged model
-        # Compute the sample variance
+    bagged_models = []
+    for num in range(50):
+        with open(f'bagged_trees/bagged-{num}.pkl', 'rb') as f:
+            m = pickle.load(f)
+            # add the list of models to bagged models
+            bagged_models.append(m)
 
-        ## Compute the Final Hypothesis Train
-        #h_final_train = aggregate_preds(train_df, models)
-        ##print("h_final=",h_final)
-        #train_error = compute_error(h_final_train, train_df.iloc[:, -1].to_list())
-        #print("train_error=",train_error)
-        #train_errors.append(train_error)
+    # Single Tree Bias and Variance
+    all_preds_single = []
+    for mod in bagged_models:
+        first = mod[-1]
+        # all predictions for a single tree learner
+        first_preds = [1 if p == 'yes' else 0 for p in first.predict_all(test_df.values)]
+        all_preds_single.append(first_preds)
 
-        ## Compute the final hypothesis for Test
-        #h_final_test = aggregate_preds(test_df, models)
-        #test_error = compute_error(h_final_test, test_df.iloc[:, -1].to_list())
-        #print("test_error=",test_error)
-        #test_errors.append(test_error)
+    labels = [1 if p == 'yes' else 0 for p in test_df.iloc[:, -1].to_list()]
+    # compute the bias
+    bias_single = compute_bias(all_preds_single, labels)
+    variance_single = compute_variance(all_preds_single, labels)
 
+    avg_bias_single = bias_single.sum() / len(bias_single)
+    avg_var_single = variance_single.sum() / len(variance_single)
 
+    print("avg_bias_single=",avg_bias_single)
+    print("avg_var_single=",avg_var_single)
 
-    # print the tree
-    #print("model.root=",model.root)
+    # Bagged Tree Bias and Variance
+    all_preds_bagged = []
+    for mod in bagged_models:
+        # all predictions for a single tree learner
+        bagged_preds = [1 if p == 'yes' else 0 for p in aggregate_preds(test_df, mod)]
+        all_preds_bagged.append(bagged_preds)
+
+    print("all_preds_bagged == all_preds_single=",all_preds_bagged == all_preds_single)
+
+    labels = [1 if p == 'yes' else 0 for p in test_df.iloc[:, -1].to_list()]
+    # compute the bias
+    bias_bagged = compute_bias(all_preds_bagged, labels)
+    variance_bagged = compute_variance(all_preds_bagged, labels)
+
+    avg_bias_bagged = bias_bagged.sum() / len(bias_bagged)
+    avg_var_bagged = variance_bagged.sum() / len(variance_bagged)
+
+    print("avg_bias_bagged=",avg_bias_bagged)
+    print("avg_var_bagged=",avg_var_bagged)
