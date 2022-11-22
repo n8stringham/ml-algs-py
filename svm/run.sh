@@ -35,3 +35,39 @@ echo
 echo ------------
 echo Experiment 3a
 echo ------------
+python3 experiments.py --dual --C=.1145 --kernel=linear
+echo
+python3 experiments.py --dual --C=.5272 --kernel=linear
+echo
+python3 experiments.py --dual --C=.8018 --kernel=linear
+
+echo ------------
+echo Experiment 3b
+echo ------------
+python3 experiments.py --dual --C=.1145 --kernel=gaussian --gamma=.1
+python3 experiments.py --dual --C=.1145 --kernel=gaussian --gamma=.5
+python3 experiments.py --dual --C=.1145 --kernel=gaussian --gamma=1
+python3 experiments.py --dual --C=.1145 --kernel=gaussian --gamma=5
+python3 experiments.py --dual --C=.1145 --kernel=gaussian --gamma=100
+echo
+python3 experiments.py --dual --C=.5272 --kernel=gaussian --gamma=.1
+python3 experiments.py --dual --C=.5272 --kernel=gaussian --gamma=.5
+python3 experiments.py --dual --C=.5272 --kernel=gaussian --gamma=1
+python3 experiments.py --dual --C=.5272 --kernel=gaussian --gamma=5
+python3 experiments.py --dual --C=.5272 --kernel=gaussian --gamma=100
+echo
+python3 experiments.py --dual --C=.8018 --kernel=gaussian --gamma=.1
+python3 experiments.py --dual --C=.8018 --kernel=gaussian --gamma=.5
+python3 experiments.py --dual --C=.8018 --kernel=gaussian --gamma=1
+python3 experiments.py --dual --C=.8018 --kernel=gaussian --gamma=5
+python3 experiments.py --dual --C=.8018 --kernel=gaussian --gamma=100
+echo
+
+
+echo ------------
+echo Experiment 3c
+echo ------------
+python3 experiments.py --dual --C=.1145 --kernel=gaussian --gamma=.1 --overlap
+python3 experiments.py --dual --C=.5727 --kernel=gaussian --gamma=.1 --overlap
+python3 experiments.py --dual --C=.8018 --kernel=gaussian --gamma=.1 --overlap
+

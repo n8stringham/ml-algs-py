@@ -1,6 +1,7 @@
 # This program implements the SVM class
 import numpy as np
-from scipy import optimize
+#from scipy import optimize
+import cvxopt
 
 class SVM():
     def __init__(self, epochs=100, lr=.01, C=100/873, schedule='a', a=1):
@@ -122,6 +123,20 @@ class SVM():
         #print("filter_array=",filter_array)
         #print("len(preds[filter_array])=",len(preds[filter_array]))
         return np.sum(preds != gold) / len(preds) 
+
+
+# Kernel Functions
+def gaussian_kernel(x, z, gamma):
+    '''
+    Calculate the Dot product with Gaussian Kernel. 
+    '''
+    return np.exp(-np.linalg.norm(x - z, 2, axis=1)**2 / gamma)
+
+def linear_kernel(x, z, gamma=None):
+    '''
+    Calculate the linear kernal.
+    '''
+    return x @ z.T
         
 class DualSVM():
     def __init__(self, C=100/873, kernel=None, gamma=None):
@@ -129,16 +144,14 @@ class DualSVM():
         self.w = None
         self.b = None
         self.kernel = kernel
+
+        if self.kernel == 'linear':
+            self.kernel_func = linear_kernel
+        if self.kernel == 'gaussian':
+            self.kernel_func = gaussian_kernel
         self.gamma = gamma
 
-    def objective_func(self, alphas, X, y):
-        '''
-        Compute the dual objective function for SVMs using alpha vector, a training matrix X, and the vector of labels y.
-        '''
-        double_sum = alphas.T @ ((X @ X.T) * (y @ y.T)) @ alphas
-        #print("double_sum=",double_sum)
-        return (1/2) * double_sum - np.sum(alphas)
-    
+
     def objective_func_k(self, alphas, kernel, y):
         '''
         Compute the dual objective function for SVMs using alpha vector, a training matrix X, and the vector of labels y.
@@ -151,83 +164,89 @@ class DualSVM():
     def _eq_constraint(self, alphas, y):
         return alphas @ y
 
-    def gaussian_kernel(self, x, z, gamma):
-        '''
-        Calculate the Dot product with Gaussian Kernel. 
-        '''
-        return np.exp(-np.linalg.norm(x - z, 2, axis=1)**2 / gamma)
 
     def train(self, X, y):
         '''
         solve the dual svm problem.
         '''
-        #args = (X, y)
-        args = (X @ X.T, y)
-        init_guess = np.zeros(X.shape[0])
-        bounds = optimize.Bounds(0, self.C)
-        #constraints = optimize.LinearConstraint(y, 0 , 0)
-        constraints = [{'type': 'eq', 'fun': self._eq_constraint, 'args': [y]}]
-        if self.kernel is not None:
-            # this is replacing X^top X from before in the objective
-            kernel = np.zeros((X.shape[0], X.shape[0]))
-            print("kernel.shape=",kernel.shape)
-            # create the gaussian kernel
-            for row in range(X.shape[0]):
-                new_row = self.gaussian_kernel(X[row,np.newaxis], X, self.gamma)
-                #print("new_row=",new_row)
-                kernel[row, :] = new_row
+        self.X = X
+        self.y = y
+        self.num_examples = X.shape[0]
 
-            # passing the kernel instead
-            args = (kernel, y)
+        kernel = np.zeros((X.shape[0], X.shape[0]))
+        #print("kernel.shape=",kernel.shape)
+        # create the gaussian kernel
+        for row in range(X.shape[0]):
+            new_row = self.kernel_func(X[row,np.newaxis], X, self.gamma)
+            #print("new_row=",new_row)
+            kernel[row, :] = new_row
 
-           # print("kernel1 - kernel2=",kernel - kernel2)
-        # solve the minimization problem directly
-        sol = optimize.minimize(self.objective_func_k, init_guess, args=args, method='SLSQP', bounds=bounds, constraints=constraints)
+        self.kernel_mat = kernel
+
+        # Optimization Tool - have to format in a certain way.
+        P = cvxopt.matrix(np.outer(y, y) * self.kernel_mat)
+        q = cvxopt.matrix(-np.ones((self.num_examples, 1)))
+        G = cvxopt.matrix(np.vstack((np.eye(self.num_examples) * -1, np.eye(self.num_examples))))
+        h = cvxopt.matrix(np.hstack((np.zeros(self.num_examples), np.ones(self.num_examples) * self.C)))
+        A = cvxopt.matrix(y, (1, self.num_examples), "d")
+        b = cvxopt.matrix(np.zeros(1))
+        cvxopt.solvers.options["show_progress"] = False
+        sol = cvxopt.solvers.qp(P, q, G, h, A, b)
+        self.alphas = np.array(sol["x"]).flatten()
         
-        print("sol=",sol)
+        #print("self.alphas=",self.alphas)
 
-        #constraints = [{'type': , 'fun': }]
-        alphas = sol.x
-        print("alphas=",alphas)
-        print("len(alphas)=",len(alphas))
+    def recover_weights(self):
+        '''
+        use the learned alpha values to recover w and b.
+        '''
+        
+        self.alphas[np.isclose(self.alphas, 0)] = 0  # zero out nearly zeros
+        self.alphas[np.isclose(self.alphas, self.C)] = self.C  # round the ones that are nearly C
 
-        support_vec_idxs = alphas > 1e-4
-        support_vec_alphas = alphas[support_vec_idxs]
-        support_vecs = X[support_vec_idxs] 
-        support_vec_labels = y[support_vec_idxs]
-        print("len(support_vec_labels)=",len(support_vec_labels))
-        print("support_vecs=",support_vecs)
-        print("support_vec_alphas=",support_vec_alphas)
-        print("len(support_vecs)=",len(support_vecs))
+        #print("self.alphas=",self.alphas)
+        #print("len(self.alphas)=",len(self.alphas))
+
+        sv_idxs = self.alphas > 0
+        sv_alphas = self.alphas[sv_idxs]
+        svs = self.X[sv_idxs] 
+        sv_labels = self.y[sv_idxs]
+        #print("len(support_vec_labels)=",len(sv_labels))
+        #print("support_vecs=",svs)
+        #print("support_vec_alphas=",sv_alphas)
+        #print("len(support_vecs)=",len(svs))
 
         # recover w and b from learned alphas
-        w = (alphas * y) @ X
-        #w = (support_vec_alphas * support_vec_labels) @ support_vecs
-        print("w=",w)
+        #w = (self.alphas * y) @ X
+        w = (sv_alphas * sv_labels) @ svs
+        #print("w=",w)
 
-        #if kernel then we don't compute w here. apply kernel in predict
+        b = np.mean(sv_labels - (sv_alphas * sv_labels) * self.kernel_mat[sv_idxs, sv_idxs])
 
-        b = 0
-        for vec, label in zip(support_vecs, support_vec_labels):
-            b += label - (w.T @ vec)
-        
-        b = b / len(support_vecs)
-
-        #b = np.mean(support_vec_labels - (support_vec_alphas * support_vec_labels) @ support_vecs * kernel)
-
-        print("b=",b)
+        #print("b=",b)
 
         # store learned params
         self.w = w
         self.b = b
+        self.sv_idxs = sv_idxs
+        self.svs = svs
+        return sv_idxs
 
     def predict(self, X):
         '''
         make predictions with the svm model.
         '''
-        preds = X @ self.w + self.b
-        # for non-linear svm just need to apply kernel to X
-        return np.where(preds < 0, -1, 1)
+        sv_idxs = self.recover_weights()
+
+        #print("self.alphas[sv_idxs]=",self.alphas[sv_idxs])
+        #print("self.y[sv_idxs]=",self.y[sv_idxs])
+
+        preds = np.zeros(X.shape[0])
+        for i in range(len(preds)):
+            preds[i] = np.sum(self.alphas[sv_idxs] * self.y[sv_idxs, np.newaxis] * self.kernel_func(X[i], self.X[sv_idxs], self.gamma)[:, np.newaxis])
+
+        #print("preds=",preds)
+        return np.where(preds + self.b < 0, -1, 1)
 
     def error(self, preds, gold):
         '''

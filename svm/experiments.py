@@ -6,6 +6,7 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from svm import SVM, DualSVM
+from newsvm import SVMCheck
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs')
@@ -18,9 +19,10 @@ parser.add_argument('--diff', action='store_true')
 
 parser.add_argument('--dual', action='store_true')
 parser.add_argument('--gamma', type=float)
-parser.add_argument('--kernel', choices=['gaussian'])
+parser.add_argument('--kernel', choices=['linear', 'gaussian'])
 
 parser.add_argument('--test', action='store_true')
+parser.add_argument('--overlap', action='store_true')
 
 args = parser.parse_args()
 
@@ -86,11 +88,13 @@ test_X, test_y = prepare_data(test_file)
 #
 if args.dual:
     model = DualSVM(C=args.C, kernel=args.kernel, gamma=args.gamma)
-    print("model=",model)
+    # Train the model
     model.train(train_X, train_y)
 
     print('Model Hyperparameters')
+    print("args.kernel=",args.kernel)
     print("args.C=",args.C)
+    print("args.gamma=",args.gamma)
     print()
     train_preds = model.predict(train_X)
     train_error = model.error(train_preds, train_y)
@@ -99,9 +103,30 @@ if args.dual:
     print("train_error=",train_error)
     print("test_error=",test_error)
 
-elif args.test:
-    pass
+    print("model.w=",model.w)
+    print("model.b=",model.b)
 
+    if args.overlap:
+        model1 = DualSVM(C=args.C, kernel=args.kernel, gamma=.1)
+        model2 = DualSVM(C=args.C, kernel=args.kernel, gamma=.5)
+        model3 = DualSVM(C=args.C, kernel=args.kernel, gamma=1)
+        model4 = DualSVM(C=args.C, kernel=args.kernel, gamma=5)
+        model5 = DualSVM(C=args.C, kernel=args.kernel, gamma=100)
+
+        support_vectors = []
+        for m in [model1, model2, model3, model4, model5]:
+            m.train(train_X, train_y)
+            m.recover_weights()
+            #support_vectors.append(m.svs)
+            support_vectors.append(m.sv_idxs)
+            print("len(m.svs)=",len(m.svs))
+
+        for i in range(len(support_vectors) - 1):
+            #intersect = np.intersect1d(support_vectors[i], support_vectors[i+1])
+            #print("support_vectors[i]=",support_vectors[i])
+            intersect = np.logical_and(support_vectors[i], support_vectors[i+1])
+            
+            print("len(train_X[intersect])=",len(train_X[intersect]))
 
 else:
 # find diff in model params
