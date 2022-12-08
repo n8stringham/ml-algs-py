@@ -6,7 +6,6 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 from svm import SVM, DualSVM
-from newsvm import SVMCheck
 
 parser = argparse.ArgumentParser()
 parser.add_argument('--epochs')
